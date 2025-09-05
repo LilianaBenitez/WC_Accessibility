@@ -1,0 +1,185 @@
+---
+title: "Inferential Analysis"
+author: "Montserrat Valdivia Medinaceli & NATALIA"
+date: '2024-04-26' #mode on '2024-09-19'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+# Call in libraries 
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(reshape2)
+library(openxlsx)
+library(kableExtra)
+library(jtools)
+library(marginaleffects)
+library(nnet)
+library(stargazer)
+library(gtsummary)
+library(MuMIn)
+```
+
+\newpage
+
+# **STEM FRESHMAN STUDENTS FIRST**
+
+```{r}
+setwd = "/Users/nataliacaporale/Documents/Academic Probation Quant Paper/"
+# Call in data 
+load("~/Documents/Academic Probation Quant Paper/Probation_Fresh_AP_and_Distressed_Filtered.Rdata")
+
+```
+
+# Question 3: Is falling on Academic Probation at least once associated with a change in the probability of graduation?
+
+
+```{r}
+# Examin graduation with the created dummy variable 
+
+#model_data=probation_F_AP_STEM
+
+probation_F <- probation_F %>%
+  mutate(College = case_when(str_sub(FIRST_TERM_MAJOR_1,end=-4)=="B" ~ "BIO",
+                             str_sub(FIRST_TERM_MAJOR_1,end=-4)=="L" ~ "L&S",
+                             str_sub(FIRST_TERM_MAJOR_1,end=-4)=="E" ~ "EE",
+                             str_sub(FIRST_TERM_MAJOR_1,end=-4)=="A" ~ "AG",
+                             .default = NA
+                             ))
+
+probation_F_BIO<-probation_F%>%
+  filter(College=="BIO")
+
+probation_F_NOBIO<-probation_F%>%
+  filter(!College=="BIO")
+
+probation_F
+
+
+```
+
+```{r}
+
+model_data0=probation_F
+model_data=probation_F_BIO
+
+model_data1<-model_data%>%
+  filter(!OnlyDism==1) %>%
+   filter(!BothAPDism==1) 
+
+model_data2<-model_data%>%
+  filter(!OnlyProb==1) %>%
+   filter(!BothAPDism==1) 
+
+c1 = glm(Graduation ~ AcadProb, data = model_data, family = "binomial")
+c2 = glm(Graduation ~ AcadProb + UCD_TERM_GPA, data = model_data, family = "binomial")
+c3 = glm(Graduation ~ AcadProb + UCD_TERM_GPA  + Gender_rec, data = model_data, family = "binomial")
+c4 = glm(Graduation ~ AcadProb + UCD_TERM_GPA  + Gender_rec + LOW_INCOME, data = model_data, family = "binomial")
+c5 = glm(Graduation ~ AcadProb + UCD_TERM_GPA  + Gender_rec + LOW_INCOME + IS_URM, data = model_data, family = "binomial")
+c6 = glm(Graduation ~ AcadDistress + UCD_TERM_GPA  + Gender_rec + LOW_INCOME + IS_URM+ FIRST_GENERATION, data =  model_data0, family = "binomial")
+
+
+AIC(c1, c2, c3, c4, c5, c6)
+BIC(c1, c2, c3, c4, c5, c6)
+
+faraway::sumary(c6)
+stargazer(c6, type="text")
+round(exp(coef(c6)), 2)
+tbl_regression(c6, exp = TRUE)
+
+```
+
+For a unit increase in GPA at admission, the odds of graduating were 1.70 times larger, holding all else constant $(p<.001)$. Similarly, being a woman compared to being a men increases the odds of graduating by a factor of 1.27 $(p<.001)$. Being a low income student, compared to not being low income student, decreases the odds of graduation by a factor of .81,  keeping all variables constant $(p<.001)$. Being an underrepresented minority student (i.e., URM) decreases the odds of graduation by a factor of .57, keeping all else constant $(p<.001)$. The odds of graduation being a first generation student, compared to being a continuing generation student, were .87 times smaller, holding all else constant $(p<.001)$. 
+
+Falling in academic probation once or twice or more in comparison to not falling in academic probation decreases the odds of graduation. Falling once in academic probation decreases the odds by a factor of .69 $(p<.001)$, falling in academic probation twice or more decreases the odds of graduation by a factor of .57 $(p<.001)$, keeping all variables constant.
+
+```{r}
+# Probability of Graduation in STEM (Against the whole population of STEM people)
+
+model_data=probation_F_AP_STEM
+
+c1 = glm(STEMGraduation ~ AcadProb, data = model_data, family = "binomial")
+c2 = glm(STEMGraduation ~ AcadProb + PRIOR_SCHOOL_GPA, data = model_data, family = "binomial")
+c3 = glm(STEMGraduation ~ AcadProb + PRIOR_SCHOOL_GPA  + Gender_rec, data = model_data, family = "binomial")
+c4 = glm(STEMGraduation ~ AcadProb + PRIOR_SCHOOL_GPA + Gender_rec + LOW_INCOME, data = model_data, family = "binomial")
+c5 = glm(STEMGraduation ~ AcadProb + PRIOR_SCHOOL_GPA  + Gender_rec + LOW_INCOME + IS_URM, data = model_data, family = "binomial")
+c6 = glm(STEMGraduation ~ AcadProb + PRIOR_SCHOOL_GPA  + Gender_rec + LOW_INCOME + IS_URM+ FIRST_GENERATION, data = model_data, family = "binomial")
+
+AIC(c1, c2, c3, c4, c5, c6)
+BIC(c1, c2, c3, c4, c5, c6)
+
+faraway::sumary(c6)
+stargazer(c6, type="text")
+round(exp(coef(c6)), 2)
+tbl_regression(c6, exp = TRUE)
+
+```
+
+```{r}
+# Probability of Graduation in STEM (Against the whole population of STEM people)
+
+model_data=probation_F_AP_STEM
+
+c1 = glm(STEMGraduation ~ AcadProb, data = model_data, family = "binomial")
+c2 = glm(STEMGraduation ~ AcadProb + UCD_TERM_GPA, data = model_data, family = "binomial")
+c3 = glm(STEMGraduation ~ AcadProb + UCD_TERM_GPA  + Gender_rec, data = model_data, family = "binomial")
+c4 = glm(STEMGraduation ~ AcadProb + UCD_TERM_GPA + Gender_rec + LOW_INCOME, data = model_data, family = "binomial")
+c5 = glm(STEMGraduation ~ AcadProb + UCD_TERM_GPA  + Gender_rec + LOW_INCOME + IS_URM, data = model_data, family = "binomial")
+c6 = glm(STEMGraduation ~ AcadProb + UCD_TERM_GPA  + Gender_rec + LOW_INCOME + IS_URM+ FIRST_GENERATION, data = model_data, family = "binomial")
+
+AIC(c1, c2, c3, c4, c5, c6)
+BIC(c1, c2, c3, c4, c5, c6)
+
+faraway::sumary(c6)
+stargazer(c6, type="text")
+round(exp(coef(c6)), 2)
+tbl_regression(c6, exp = TRUE)
+
+```
+
+
+```{r}
+# Probability of Graduation in STEM (Against the population of people who graduated in something)
+```
+
+#NEED TO FIFGURE OUT THE SQITCH VARIABLE STILL
+#NEED TO FIFGURE OUT THE SQITCH VARIABLE STILL
+#NEED TO FIFGURE OUT THE SQITCH VARIABLE STILL
+#NEED TO FIFGURE OUT THE SQITCH VARIABLE STILL
+#NEED TO FIFGURE OUT THE SQITCH VARIABLE STILL
+
+#NEED TO FIFGURE OUT THE SQITCH VARIABLE STILL
+
+
+
+```{r}
+# Probability of Graduation non_STEM, having started STEM (amonng those who do graduate)
+
+Grad_probation_F_AP_STEM<-probation_F_AP_STEM %>%
+filter(Graduation==1)
+
+model_data=probation_F_AP_STEM
+
+c1 = glm(SwitchandGrad ~ AcadProb, data = model_data, family = "binomial")
+c2 = glm(SwitchandGrad ~ AcadProb + PRIOR_SCHOOL_GPA, data = model_data, family = "binomial")
+c3 = glm(SwitchandGrad ~ AcadProb + PRIOR_SCHOOL_GPA  + Gender_rec, data = model_data, family = "binomial")
+c4 = glm(SwitchandGrad ~ AcadProb + PRIOR_SCHOOL_GPA + Gender_rec + LOW_INCOME, data = model_data, family = "binomial")
+c5 = glm(SwitchandGrad ~ AcadProb + PRIOR_SCHOOL_GPA  + Gender_rec + LOW_INCOME + IS_URM, data = model_data, family = "binomial")
+c6 = glm(SwitchandGrad ~ AcadProb + PRIOR_SCHOOL_GPA  + Gender_rec + LOW_INCOME + IS_URM+ FIRST_GENERATION, data = model_data, family = "binomial")
+
+AIC(c1, c2, c3, c4, c5, c6)
+BIC(c1, c2, c3, c4, c5, c6)
+
+faraway::sumary(c6)
+stargazer(c6, type="text")
+round(exp(coef(c6)), 2)
+tbl_regression(c6, exp = TRUE)
+
+```
+
