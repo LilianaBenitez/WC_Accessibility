@@ -1,0 +1,281 @@
+---
+title: "Quant Pilot Data"
+author: "Lili Benitez"
+date: "2025-03-04"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(readxl)
+library(DHARMa)
+```
+```{r}
+"C:/Users/lb37426/Downloads"
+WC_excel <- "../../Downloads/WC_AccessibilityPilot_.xlsx"
+data <- "Participant Data"
+d <- read_excel(WC_excel, sheet = data)
+#d<-read_csv("../../Downloads/WC_AccessibilityPilot__.csv")
+
+d<-d%>%
+  select(-Name)
+d<-d%>%
+  mutate(Mean_SPIRES_pre=(SPIRES1_pre+SPIRES2_pre+SPIRES3_pre+SPIRES4_pre_RC+SPIRES5_pre_RC)/5, Mean_SPIRES_post=(SPIRES1_post+SPIRES2_post+SPIRES3_post+SPIRES4_post_RC+SPIRES5_post_RC)/5)
+d<-d%>%
+  mutate(SUM_Belonging_pre=B_sc_pre+B_sw_pre+B_csc_pre+B_out_pre_RC+B_acc_pre+B_res_pre+B_dis_pre_RC+B_val_pre+B_neg_pre_RC+B_app_pre+B_ex_pre_RC+B_fit_pre+B_insig_pre_RC+B_ease_pre+B_anx_pre_RC+B_comf_pre+B_tense_pre_RC+B_nerve_pre_RC+B_cont_pre+B_calm_pre+B_inad_pre_RC)
+d<-d%>%
+  mutate(SUM_Belonging_post=B_sc_post+B_sw_post+B_csc_post+B_out_post_RC+B_acc_post+B_res_post+B_dis_post_RC+B_val_post+B_neg_post_RC+B_app_post+B_ex_post_RC+B_fit_post+B_insig_post_RC+B_ease_post+B_anx_post_RC+B_comf_post+B_tense_post_RC+B_nerve_post_RC+B_cont_post+B_calm_post+B_inad_post_RC)
+
+```
+
+Checking Spires Noramality
+```{r}
+hist(d$Mean_SPIRES_pre)
+hist(d$Mean_SPIRES_post) #doesn't look the most normal
+t.test(d$Mean_SPIRES_post,d$Mean_SPIRES_pre) #p-value = 1.142e-08
+shapiro.test(d$Mean_SPIRES_pre) #normal
+shapiro.test(d$Mean_SPIRES_post) #p=0.01
+```
+Checking Belonging normality
+```{r}
+hist(d$SUM_Belonging_pre)
+hist(d$SUM_Belonging_post) #doesn't look the most normal
+
+shapiro.test(d$SUM_Belonging_pre) #normal
+shapiro.test(d$SUM_Belonging_post) #p=0.001
+
+t.test(d$SUM_Belonging_post,d$SUM_Belonging_pre) # p-value = 4.073e-05
+```
+#PIO scores
+```{r}
+hist(d$PIO_pre)
+hist(d$PIO_post)
+
+t.test(d$PIO_post,d$PIO_pre) #p-value = 2.813e-05
+```
+```{r,cars}
+library(car)
+?qqplot
+qqnorm(d$Mean_SPIRES_pre)
+qqnorm(d$Mean_SPIRES_post)
+qqnorm(d$SUM_Belonging_pre)
+qqnorm(d$SUM_Belonging_post)
+qqnorm(d$PIO_pre)
+qqnorm(d$PIO_post)
+```
+
+```{r}
+d2 <- select(d, c(ID, Session, Gender_man, Gender_woman, Gender_NB, Race_W, Race_B, Race_N, Race_A,
+                  Race_H, LGBT, D_phy, D_Men, D_Sen, D_Learn, D_Chron, Mean_SPIRES_post,
+                  Mean_SPIRES_pre, SUM_Belonging_pre, SUM_Belonging_post, PIO_pre, PIO_post))
+
+d2$PIO_delta <- d2$PIO_post - d2$PIO_pre
+d2$BEL_delta <- d2$SUM_Belonging_post - d2$SUM_Belonging_pre
+d2$SPIRES_delta <- d2$Mean_SPIRES_post - d2$Mean_SPIRES_pre
+
+# create long table
+d3 <- pivot_longer(data = d2, cols = c(Mean_SPIRES_post, Mean_SPIRES_pre, SUM_Belonging_pre, SUM_Belonging_post, PIO_pre, PIO_post),
+                  names_to = "type", values_to = "score") # looks good, all scores populate at the end of the table, all demographics retained
+
+d3$type <- as.factor(d3$type)
+head(d3)
+```
+```{r}
+# create an average pre-and post for each score, then graph those 6 numbers
+d4<-d3|>
+  drop_na()
+std <- function(x) sd(x)/sqrt(length(x)) #standard  error function
+ave_scores <- d4 %>%
+  group_by(type) %>%
+  summarise(
+  ave_score = mean(score, na.rm=TRUE), # create average score
+  std=std(score)) # std for error bars
+
+
+# this function doesn't work yet - still works as separate chunks of code
+#separate_scores <- function(ave_scores) {
+
+ave_SPIRES_all <- ave_scores |>
+  filter(type %in% c("Mean_SPIRES_pre", "Mean_SPIRES_post")) |>
+  mutate(measure = "SPIRES (Attitude)",
+         type = recode_factor(type, "Mean_SPIRES_pre" = "PRE", "Mean_SPIRES_post" = "POST"))
+ave_PIO_all <- ave_scores |>
+  filter(type %in% c("PIO_pre", "PIO_post")) |>
+  mutate(measure = "PIO (Identity)",
+         type = recode_factor(type, "PIO_pre" = "PRE", "PIO_post" = "POST"))
+ave_BEH_all <- ave_scores |>
+  filter(type %in% c("SUM_Belonging_pre", "SUM_Belonging_post")) |>
+  mutate(measure = "Belonging",
+         type = recode_factor(type, "SUM_Belonging_pre" = "PRE", "SUM_Belonging_post" = "POST"))
+#return(c(ave_SPIRES,ave_PIO,ave_BEH))
+
+#}
+
+#ave_SPIRES <- separate_scores(ave_scores)[1]
+ave_SPIRES_all
+ave_PIO_all
+ave_BEH_all
+```
+
+```{r}
+
+graph_it <- function(x) {
+measure <- x$measure[1]
+#get user input for plot title?
+x |>
+  mutate(type = fct_relevel(type,
+            "PRE", "POST")) |>
+  ggplot(aes(x = type, y= ave_score)) +
+    geom_bar(stat = "identity", width=0.5, show.legend = FALSE, fill="darkgreen")+
+   geom_errorbar(aes(x=type, ymin=ave_score-std, ymax=ave_score+std), width=0.4, colour="lightblue", alpha=0.9, linewidth=1.3)+
+    #labs(title= measure, x = "", y = "Average Score") +
+    theme_minimal()+
+  theme(
+  legend.key.size = unit(1, 'cm'),
+  # plot.title = element_text(size = 20),
+  plot.title = element_blank(),
+  axis.text.x = element_text(size = 20),
+  axis.text.y = element_text(size = 20),
+  #axis.text.x = element_blank(),
+ # axis.title.x = element_text(size = 20, margin = margin(t = 15, unit = "pt")),
+  axis.title.x = element_blank(),
+ # axis.title.y = element_text(size = 20, margin = margin(r = 15, unit = "pt")),
+ axis.title.y = element_blank(),
+  strip.text.x = element_text(size = 20),
+ plot.margin = unit(c(1.5, 0, 0, 0), "lines"))
+
+   
+
+}
+
+spires_plot<-graph_it(ave_SPIRES_all)
+PIO_plot<-graph_it(ave_PIO_all)
+Belonging_plot<-graph_it(ave_BEH_all)
+
+```
+
+```{r}
+
+d4$D_phy<-as.factor(d4$D_phy)
+d4$Session<-as.factor(d4$Session)
+Belonging<-d4%>%
+  filter(type=="SUM_Belonging_post"|type=="SUM_Belonging_pre")%>%
+  mutate(type = fct_relevel(type,
+            "SUM_Belonging_pre", "SUM_Belonging_post"))
+Other_scores<-d4%>%
+  filter(!type=="SUM_Belonging_post",!type=="SUM_Belonging_pre")%>%
+  mutate(type = fct_relevel(type,
+            "Mean_SPIRES_pre", "Mean_SPIRES_post", "PIO_pre","PIO_post" ))
+
+Belonging%>%
+  ggplot(aes(x =type, y= score)) +
+    geom_boxplot()+
+  facet_wrap(~D_phy)+
+  theme_minimal()
+
+
+  ggplot(aes(x =type, y= score)) +
+    geom_boxplot()+
+  facet_wrap(~Gender_man)+
+  theme_minimal()+
+  theme(
+  legend.key.size = unit(1, 'cm'),
+   plot.title = element_text(size = 20),
+  #plot.title = element_blank(),
+ #axis.text.x = element_text(size = 20),
+  axis.text.y = element_text(size = 20),
+  #axis.text.x = element_blank(),
+ # axis.title.x = element_text(size = 20, margin = margin(t = 15, unit = "pt")),
+  axis.title.x = element_blank(),
+ # axis.title.y = element_text(size = 20, margin = margin(r = 15, unit = "pt")),
+ axis.title.y = element_blank(),
+  strip.text.x = element_text(size = 20),
+ plot.margin = unit(c(1.5, 0, 0, 0), "lines"))
+
+Other_scores%>%
+  ggplot(aes(x =Session, y= score, col=type)) +
+    geom_boxplot()+
+  theme_minimal()
+
+
+d4%>%
+  ggplot(aes(x =D_, y= score)) +
+    geom_bar(stat = "identity", width=0.5, show.legend = FALSE, fill="darkgreen")+
+  facet_wrap(~type)
+```
+
+```{r}
+library(cowplot)
+combined_plot<-plot_grid(spires_plot, PIO_plot, Belonging_plot, ncol=3, align='v', labels=c('Attitude', 'Identity', 'Belonging'), label_size = 20)
+
+final_plot <- ggdraw() +
+                  draw_plot(combined_plot, 0.03, 0.03, 0.97, 0.97) +  # arguments = x, y, width, height
+                  draw_label("Survey Type", x = 0.5, y = 0.01, vjust = 0, angle = 0, size = 30) +  # X-axis label
+                  draw_label("Average Score", x = 0.01, y = 0.5, vjust = 1, angle = 90, size = 30)  # Y-axis label
+
+ggsave("./Figures/Scores_plot.png", final_plot, width = 4000, height = 3000, units = "px")
+
+```
+#Gender
+```{r}
+ave_scores_m <- d3 |>
+  filter(Gender_man > 0) |>
+  group_by(type) |>
+  summarise(
+  ave_score = mean(score, na.rm=TRUE), 
+  sd=sd(score, na.rm=TRUE)) # create average score
+
+ave_SPIRES_men <- ave_scores_m |>
+  filter(type %in% c("Mean_SPIRES_pre", "Mean_SPIRES_post")) |>
+  mutate(measure = "SPIRES (Attitude)",
+         type = recode_factor(type, "Mean_SPIRES_pre" = "PRE", "Mean_SPIRES_post" = "POST"))
+ave_PIO_men <- ave_scores_m |>
+  filter(type %in% c("PIO_pre", "PIO_post")) |>
+  mutate(measure = "PIO (Identity)",
+         type = recode_factor(type, "PIO_pre" = "PRE", "PIO_post" = "POST"))
+ave_BEH_men <- ave_scores_m |>
+  filter(type %in% c("SUM_Belonging_pre", "SUM_Belonging_post")) |>
+  mutate(measure = "Belonging",
+         type = recode_factor(type, "SUM_Belonging_pre" = "PRE", "SUM_Belonging_post" = "POST"))
+
+spires_m<-graph_it(ave_SPIRES_men)
+pio_m<-graph_it(ave_PIO_men)
+BEH_m<-graph_it(ave_BEH_men)
+
+combined_plot_men<-plot_grid(spires_m, pio_m, BEH_m, ncol=3, labels=c('Attitude', 'Identity', 'Belonging'), label_size = 20)
+
+final_plot_men <- ggdraw() +
+                  draw_plot(combined_plot, 0.03, 0.03, 0.97, 0.97) +  # arguments = x, y, width, height
+                  draw_label("Survey Type", x = 0.5, y = 0.01, vjust = 0, angle = 0, size = 30) +  # X-axis label
+                  draw_label("Average Score", x = 0.01, y = 0.5, vjust = 1, angle = 90, size = 30)  # Y-axis label
+
+ggsave("./Figures/Scores_plot_men.png", final_plot_men, width = 4000, height = 3000, units = "px")
+
+
+#woman=TRUE
+ave_scores_w <- d3 |>
+  filter(Gender_woman > 0) |>
+  group_by(type) |>
+  summarise(
+  ave_score = mean(score, na.rm=TRUE), 
+  sd=sd(score, na.rm=TRUE)) # create average score
+
+ave_SPIRES_woman <- ave_scores_w |>
+  filter(type %in% c("Mean_SPIRES_pre", "Mean_SPIRES_post")) |>
+  mutate(measure = "SPIRES (Attitude)",
+         type = recode_factor(type, "Mean_SPIRES_pre" = "PRE", "Mean_SPIRES_post" = "POST"))
+ave_PIO_woman <- ave_scores_w |>
+  filter(type %in% c("PIO_pre", "PIO_post")) |>
+  mutate(measure = "PIO (Identity)",
+         type = recode_factor(type, "PIO_pre" = "PRE", "PIO_post" = "POST"))
+ave_BEH_woman <- ave_scores_w |>
+  filter(type %in% c("SUM_Belonging_pre", "SUM_Belonging_post")) |>
+  mutate(measure = "Belonging",
+         type = recode_factor(type, "SUM_Belonging_pre" = "PRE", "SUM_Belonging_post" = "POST"))
+
+graph_it(ave_SPIRES_woman)
+graph_it(ave_PIO_woman)
+graph_it(ave_BEH_woman)
+#NB=True 
+```
