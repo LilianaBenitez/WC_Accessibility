@@ -10,13 +10,15 @@ library(tidyverse)
 library(ggplot2)
 library(readxl)
 library(DHARMa)
+library(lme4)
+library(lmerTest)
 ```
+Onedrive is weird... make sure to set wd in files pane manually
+
 ```{r}
-"C:/Users/lb37426/Downloads"
-WC_excel <- "../../Downloads/WC_AccessibilityPilot_.xlsx"
-data <- "Participant Data"
-d <- read_excel(WC_excel, sheet = data)
-#d<-read_csv("../../Downloads/WC_AccessibilityPilot__.csv")
+getwd()
+d <- read_excel("WC_AccessibilityPilot.xlsx") # works, but you have to set the Wd in the files pane manually first...
+
 
 d<-d%>%
   select(-Name)
@@ -51,7 +53,8 @@ t.test(d$SUM_Belonging_post,d$SUM_Belonging_pre) # p-value = 4.073e-05
 ```{r}
 hist(d$PIO_pre)
 hist(d$PIO_post)
-
+shapiro.test(d$PIO_pre)
+shapiro.test(d$PIO_post) #not normal
 t.test(d$PIO_post,d$PIO_pre) #p-value = 2.813e-05
 ```
 ```{r,cars}
@@ -63,6 +66,9 @@ qqnorm(d$SUM_Belonging_pre)
 qqnorm(d$SUM_Belonging_post)
 qqnorm(d$PIO_pre)
 qqnorm(d$PIO_post)
+
+plot(spires_pre_qq)
+
 ```
 
 ```{r}
@@ -127,8 +133,8 @@ x |>
   mutate(type = fct_relevel(type,
             "PRE", "POST")) |>
   ggplot(aes(x = type, y= ave_score)) +
-    geom_bar(stat = "identity", width=0.5, show.legend = FALSE, fill="darkgreen")+
-   geom_errorbar(aes(x=type, ymin=ave_score-std, ymax=ave_score+std), width=0.4, colour="lightblue", alpha=0.9, linewidth=1.3)+
+    geom_bar(stat = "identity", width=0.5, show.legend = FALSE, fill="grey")+
+   geom_errorbar(aes(x=type, ymin=ave_score-std, ymax=ave_score+std), width=0.4, colour="black", alpha=0.9, linewidth=1.3)+
     #labs(title= measure, x = "", y = "Average Score") +
     theme_minimal()+
   theme(
@@ -154,6 +160,7 @@ PIO_plot<-graph_it(ave_PIO_all)
 Belonging_plot<-graph_it(ave_BEH_all)
 
 ```
+
 
 ```{r}
 
@@ -207,14 +214,14 @@ d4%>%
 
 ```{r}
 library(cowplot)
-combined_plot<-plot_grid(spires_plot, PIO_plot, Belonging_plot, ncol=3, align='v', labels=c('Attitude', 'Identity', 'Belonging'), label_size = 20)
+combined_plot<-plot_grid(spires_plot, PIO_plot, Belonging_plot, ncol=1, align='v', labels=c('Attitude', 'Identity', 'Belonging'), label_size = 20)
 
 final_plot <- ggdraw() +
                   draw_plot(combined_plot, 0.03, 0.03, 0.97, 0.97) +  # arguments = x, y, width, height
-                  draw_label("Survey Type", x = 0.5, y = 0.01, vjust = 0, angle = 0, size = 30) +  # X-axis label
-                  draw_label("Average Score", x = 0.01, y = 0.5, vjust = 1, angle = 90, size = 30)  # Y-axis label
+                  draw_label("Survey Type", x = 0.5, y = 0.01, vjust = 0, angle = 0, size = 20) +  # X-axis label
+                  draw_label("Average Score", x = 0.01, y = 0.5, vjust = 1, angle = 90, size = 20)  # Y-axis label
 
-ggsave("./Figures/Scores_plot.png", final_plot, width = 4000, height = 3000, units = "px")
+ggsave("./Figures/Scores_plot.png", final_plot, width = 2000, height = 4000, units = "px")
 
 ```
 #Gender
@@ -278,4 +285,31 @@ graph_it(ave_SPIRES_woman)
 graph_it(ave_PIO_woman)
 graph_it(ave_BEH_woman)
 #NB=True 
+```
+GLMM trial
+```{r}
+m1<- lmer(Mean_SPIRES_pre ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
+summary(m1)
+m2<-lmer(Mean_SPIRES_post ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
+summary(m2)
+m3<- lmer(PIO_pre ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
+summary(m3)
+m4<- lmer(PIO_post ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
+summary(m4)
+m5<- lmer(SUM_Belonging_pre ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
+summary(m5)
+m6<- lmer(SUM_Belonging_post ~ LGBT+(1|Session), data = d)
+summary(m6)
+
+d5<-d4%>%
+  select(-type, -score)%>%unique()
+
+m7<- lmer(SPIRES_delta~ LGBT+(1|Session), data = d5)
+summary(m7)
+
+m8<- lmer(PIO_delta~ D_phy+(1|Session), data = d5)
+summary(m8)
+
+m9<- lmer(BEL_delta~Gender_woman+(1|Session), data = d5)
+summary(m9)
 ```
