@@ -12,6 +12,7 @@ library(readxl)
 library(DHARMa)
 library(lme4)
 library(lmerTest)
+library(performance)
 ```
 Onedrive is weird... make sure to set wd in files pane manually
 
@@ -286,10 +287,14 @@ graph_it(ave_PIO_woman)
 graph_it(ave_BEH_woman)
 #NB=True 
 ```
-GLMM trial
+
+
+GLMM trial- try some transformations? Number of disability types selected. 
 ```{r}
+#session as random effect
 m1<- lmer(Mean_SPIRES_pre ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
 summary(m1)
+check_overdispersion(m1)
 m2<-lmer(Mean_SPIRES_post ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
 summary(m2)
 m3<- lmer(PIO_pre ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
@@ -300,6 +305,7 @@ m5<- lmer(SUM_Belonging_pre ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
 summary(m5)
 m6<- lmer(SUM_Belonging_post ~ LGBT+(1|Session), data = d)
 summary(m6)
+check_overdispersion(m6)
 
 d5<-d4%>%
   select(-type, -score)%>%unique()
@@ -312,4 +318,7 @@ summary(m8)
 
 m9<- lmer(BEL_delta~Gender_woman+(1|Session), data = d5)
 summary(m9)
+check_overdispersion(m9)
+#session as fixed effect 
+
 ```
