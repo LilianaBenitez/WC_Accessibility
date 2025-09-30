@@ -13,6 +13,9 @@ library(DHARMa)
 library(lme4)
 library(lmerTest)
 library(performance)
+library(emmeans)
+library(MuMIn)
+library(car)
 ```
 Onedrive is weird... make sure to set wd in files pane manually
 
@@ -36,7 +39,8 @@ Checking Spires Noramality
 ```{r}
 hist(d$Mean_SPIRES_pre)
 hist(d$Mean_SPIRES_post) #doesn't look the most normal
-t.test(d$Mean_SPIRES_post,d$Mean_SPIRES_pre) #p-value = 1.142e-08
+t_SPIRES<-t.test(d$Mean_SPIRES_post,d$Mean_SPIRES_pre, paired=TRUE) #p-value = 1.696e-09
+
 shapiro.test(d$Mean_SPIRES_pre) #normal
 shapiro.test(d$Mean_SPIRES_post) #p=0.01
 ```
@@ -48,7 +52,9 @@ hist(d$SUM_Belonging_post) #doesn't look the most normal
 shapiro.test(d$SUM_Belonging_pre) #normal
 shapiro.test(d$SUM_Belonging_post) #p=0.001
 
-t.test(d$SUM_Belonging_post,d$SUM_Belonging_pre) # p-value = 4.073e-05
+t.test(d$SUM_Belonging_post,d$SUM_Belonging_pre, paired=TRUE) # p-value = 5.884e-06
+sd(d$SUM_Belonging_post)
+sd(d$SUM_Belonging_pre)
 ```
 #PIO scores
 ```{r}
@@ -56,8 +62,11 @@ hist(d$PIO_pre)
 hist(d$PIO_post)
 shapiro.test(d$PIO_pre)
 shapiro.test(d$PIO_post) #not normal
-t.test(d$PIO_post,d$PIO_pre) #p-value = 2.813e-05
+t.test(d$PIO_post,d$PIO_pre, paired = TRUE) #p-value = 2.304e-06
+sd(d$PIO_post)
+sd(d$PIO_pre)
 ```
+
 ```{r,cars}
 library(car)
 ?qqplot
@@ -71,10 +80,18 @@ qqnorm(d$PIO_post)
 plot(spires_pre_qq)
 
 ```
+```{r}
+d<-d%>%
+  mutate(gender=(if_else(Gender_woman==1, "woman", "man")))%>%
+  mutate(gender2=(if_else(Gender_NB==1 ,"NB", d$gender)))
+d<-d%>%
+  select(-gender)
+  
+```
 
 ```{r}
 d2 <- select(d, c(ID, Session, Gender_man, Gender_woman, Gender_NB, Race_W, Race_B, Race_N, Race_A,
-                  Race_H, LGBT, D_phy, D_Men, D_Sen, D_Learn, D_Chron, Mean_SPIRES_post,
+                  Race_H, LGBT, D_phy, D_Men, D_Sen, D_Learn, D_Chron, Mean_SPIRES_post,gender2,
                   Mean_SPIRES_pre, SUM_Belonging_pre, SUM_Belonging_post, PIO_pre, PIO_post))
 
 d2$PIO_delta <- d2$PIO_post - d2$PIO_pre
@@ -88,6 +105,42 @@ d3 <- pivot_longer(data = d2, cols = c(Mean_SPIRES_post, Mean_SPIRES_pre, SUM_Be
 d3$type <- as.factor(d3$type)
 head(d3)
 ```
+# filtering by type for full models
+```{r}
+d_PIO<-d3%>%
+  filter(type=="PIO_pre"|type=="PIO_post")
+
+d_SPIRES<-d3%>%
+  filter(type=="Mean_SPIRES_pre"|type=="Mean_SPIRES_post")
+
+d_bel<-d3%>%
+  filter(type=="SUM_Belonging_pre"|type=="SUM_Belonging_post")
+```
+
+```{r}
+m_PIO_tot<-lmer(score~type+(1|Session)+(1|ID), data=d_PIO)
+summary(m_PIO_tot)
+anova(m_PIO_tot)
+means_pio<-emmeans(m_PIO_tot, ~type)
+pairs(means_pio)
+check_overdispersion(m_PIO_tot)
+
+m_sp_tot<-lmer(score~type+(1|Session)+(1|ID), data=d_SPIRES)
+summary(m_sp_tot)
+check_overdispersion(m_sp_tot)
+
+m_bel_tot<-lmer(score~type+(1|Session)+(1|ID), data=d_bel) #type=pre and post
+summary(m_bel_tot)
+check_overdispersion(m_bel_tot)
+
+
+```
+```{r}
+m_SPIRES<-lmer(Mean_SPIRES_post~Mean_SPIRES_pre+(1|Session), data=d)
+summary(m_SPIRES)
+plot(d$Mean_SPIRES_post~d$Mean_SPIRES_pre)
+```
+
 ```{r}
 # create an average pre-and post for each score, then graph those 6 numbers
 d4<-d3|>
@@ -225,6 +278,7 @@ final_plot <- ggdraw() +
 ggsave("./Figures/Scores_plot.png", final_plot, width = 2000, height = 4000, units = "px")
 
 ```
+
 #Gender
 ```{r}
 ave_scores_m <- d3 |>
@@ -289,7 +343,63 @@ graph_it(ave_BEH_woman)
 ```
 
 
-GLMM trial- try some transformations? Number of disability types selected. 
+GLMM trial- need to make categorical 
+```{r}
+d5<-d4%>%
+  select(-type, -score)%>%unique()
+d5$Gender_woman<-as.factor(d5$Gender_woman)
+d5$gender2<-as.factor(d5$gender2)
+d5$LGBT<-as.factor(d5$LGBT)
+d5$D_phy<-as.factor(d5$D_phy)
+d5$D_Learn<-as.factor(d5$D_Learn)
+d5$D_Sen<-as.factor(d5$D_Sen)
+d5$D_Chron<-as.factor(d5$D_Chron)
+d5$Race_W<-as.factor(d5$Race_W)
+d5$D_Men<-as.factor(d5$D_Men)
+```
+
+```{r}
+d<-d%>%
+  mutate(gender=(if_else(Gender_woman==1, "woman", "man")))%>%
+  mutate(gender2=(if_else(Gender_NB==1 ,"NB", d$gender)))
+d<-d%>%
+  select(-gender)
+  
+```
+
+```{r, actual models}
+
+m_spires<-lmer(SPIRES_delta~gender2+LGBT+D_phy+D_Men+D_Sen+D_Learn+D_Chron+Race_W+(1|Session), data=d5)
+summary(m_spires)
+check_overdispersion(m_spires)
+
+m_pio<-lmer(PIO_delta~gender2+LGBT+D_phy+D_Men+D_Sen+D_Learn+D_Chron+Race_W+(1|Session), data=d5)
+summary(m_pio)
+check_overdispersion(m_spires)
+
+m_bel<-lmer(BEL_delta~gender2+LGBT+D_phy+D_Men+D_Sen+D_Learn+D_Chron+Race_W+(1|Session), data=d5)
+summary(m_bel)
+check_overdispersion(m_bel)
+
+```
+```{r, model selection}
+options(na.action = "na.fail")
+spires_dredge<-dredge(m_spires,  rank= "AICc")
+top_model_spires<-get.models(spires_dredge, subset = 1)[[1]] #intercept is only model
+summary(top_model_spires)#intercept is only model
+#PIO
+
+pio_dredge<-dredge(m_pio,  rank= "AICc")
+top_model_pio<-get.models(pio_dredge, subset = 1)[[1]] #intercept is only model
+summary(top_model_pio) #top model has gender only
+
+bel_dredge<-dredge(m_bel,  rank= "AICc")
+top_model_bel<-get.models(bel_dredge, subset = 1)[[1]] #intercept is only model
+summary(top_model_bel) #top model has everything, gender NB is sig
+
+
+```
+
 ```{r}
 #session as random effect
 m1<- lmer(Mean_SPIRES_pre ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
@@ -301,24 +411,46 @@ m3<- lmer(PIO_pre ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
 summary(m3)
 m4<- lmer(PIO_post ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
 summary(m4)
-m5<- lmer(SUM_Belonging_pre ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
+m5<- lmer(SPIRES_delta ~ LGBT+D_Learn+(1|Session), data = d5)
 summary(m5)
-m6<- lmer(SUM_Belonging_post ~ LGBT+(1|Session), data = d)
+m6<- lmer(SPIRES_delta ~ LGBT*D_Learn+(1|Session), data = d5)
 summary(m6)
+anova(m6)
 check_overdispersion(m6)
 
 d5<-d4%>%
   select(-type, -score)%>%unique()
 
-m7<- lmer(SPIRES_delta~ LGBT+(1|Session), data = d5)
+
+m7<- lmer(SPIRES_delta~ Gender_woman+D_Chron+D_Learn+LGBT+D_Sen+D_phy+D_Men+(1|Session), data = d5)
 summary(m7)
+options(na.action = "na.fail")
+m7_dredge<-dredge(m7,  rank= "AICc")
+top_model_spires<-get.models(m7_dredge, subset = 1)[[1]] #intercept is only model
+summary(top_model_spires)
 
-m8<- lmer(PIO_delta~ D_phy+(1|Session), data = d5)
+m8<- lmer(PIO_delta~ Gender_woman+LGBT+D_phy+D_Men+D_Sen+D_Learn+D_Chron+Race_W+(1|Session), data = d5)
 summary(m8)
+m8_dredge<-dredge(m8,  rank= "AICc")
+top_model_PIO<-get.models(m8_dredge, subset = 1)[[1]]
+summary(top_model_PIO)#intercept is only model
 
-m9<- lmer(BEL_delta~Gender_woman+(1|Session), data = d5)
+
+m9<- lmer(BEL_delta~ Gender_woman+Gender_NB+LGBT+D_phy+D_Men+D_Sen+D_Learn+D_Chron+Race_W+(1|Session), data = d5)
 summary(m9)
+m9_dredge<-dredge(m9,  rank= "AICc")
+top_model_BEL<-get.models(m9_dredge, subset = 1)[[1]]
+summary(top_model_BEL) #top model has everything, nothing is sig
+vif(m9)
 check_overdispersion(m9)
 #session as fixed effect 
+
+```
+```{r}
+d_LGBT_learn<-d%>%
+  filter(LGBT==1)%>%
+  filter(D_Learn==0)
+
+t.test(d_LGBT_learn$Mean_SPIRES_post,d_LGBT_learn$Mean_SPIRES_pre)
 
 ```
