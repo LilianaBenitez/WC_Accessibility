@@ -80,9 +80,14 @@ qqnorm(d$PIO_post)
 plot(spires_pre_qq)
 
 ```
+
 ```{r}
+d$Gender_woman<-as.factor(d$Gender_woman)
+
+d$Gender_NB<-as.factor(d$Gender_NB)
 d<-d%>%
-  mutate(gender=(if_else(Gender_woman==1, "woman", "man")))%>%
+  mutate(gender=(if_else(Gender_woman==1, "woman", "man")))
+d<-d%>%
   mutate(gender2=(if_else(Gender_NB==1 ,"NB", d$gender)))
 d<-d%>%
   select(-gender)
@@ -105,6 +110,7 @@ d3 <- pivot_longer(data = d2, cols = c(Mean_SPIRES_post, Mean_SPIRES_pre, SUM_Be
 d3$type <- as.factor(d3$type)
 head(d3)
 ```
+
 # filtering by type for full models
 ```{r}
 d_PIO<-d3%>%
@@ -123,6 +129,7 @@ summary(m_PIO_tot)
 anova(m_PIO_tot)
 means_pio<-emmeans(m_PIO_tot, ~type)
 pairs(means_pio)
+hist(m_PIO_tot$score)
 check_overdispersion(m_PIO_tot)
 
 m_sp_tot<-lmer(score~type+(1|Session)+(1|ID), data=d_SPIRES)
@@ -136,148 +143,12 @@ check_overdispersion(m_bel_tot)
 
 ```
 ```{r}
-m_SPIRES<-lmer(Mean_SPIRES_post~Mean_SPIRES_pre+(1|Session), data=d)
-summary(m_SPIRES)
-plot(d$Mean_SPIRES_post~d$Mean_SPIRES_pre)
-```
-
-```{r}
-# create an average pre-and post for each score, then graph those 6 numbers
 d4<-d3|>
   drop_na()
-std <- function(x) sd(x)/sqrt(length(x)) #standard  error function
-ave_scores <- d4 %>%
-  group_by(type) %>%
-  summarise(
-  ave_score = mean(score, na.rm=TRUE), # create average score
-  std=std(score)) # std for error bars
-
-
-# this function doesn't work yet - still works as separate chunks of code
-#separate_scores <- function(ave_scores) {
-
-ave_SPIRES_all <- ave_scores |>
-  filter(type %in% c("Mean_SPIRES_pre", "Mean_SPIRES_post")) |>
-  mutate(measure = "SPIRES (Attitude)",
-         type = recode_factor(type, "Mean_SPIRES_pre" = "PRE", "Mean_SPIRES_post" = "POST"))
-ave_PIO_all <- ave_scores |>
-  filter(type %in% c("PIO_pre", "PIO_post")) |>
-  mutate(measure = "PIO (Identity)",
-         type = recode_factor(type, "PIO_pre" = "PRE", "PIO_post" = "POST"))
-ave_BEH_all <- ave_scores |>
-  filter(type %in% c("SUM_Belonging_pre", "SUM_Belonging_post")) |>
-  mutate(measure = "Belonging",
-         type = recode_factor(type, "SUM_Belonging_pre" = "PRE", "SUM_Belonging_post" = "POST"))
-#return(c(ave_SPIRES,ave_PIO,ave_BEH))
-
-#}
-
-#ave_SPIRES <- separate_scores(ave_scores)[1]
-ave_SPIRES_all
-ave_PIO_all
-ave_BEH_all
+d5<-d4%>%
+  select(-type, -score)%>%unique()
 ```
 
-```{r}
-
-graph_it <- function(x) {
-measure <- x$measure[1]
-#get user input for plot title?
-x |>
-  mutate(type = fct_relevel(type,
-            "PRE", "POST")) |>
-  ggplot(aes(x = type, y= ave_score)) +
-    geom_bar(stat = "identity", width=0.5, show.legend = FALSE, fill="grey")+
-   geom_errorbar(aes(x=type, ymin=ave_score-std, ymax=ave_score+std), width=0.4, colour="black", alpha=0.9, linewidth=1.3)+
-    #labs(title= measure, x = "", y = "Average Score") +
-    theme_minimal()+
-  theme(
-  legend.key.size = unit(1, 'cm'),
-  # plot.title = element_text(size = 20),
-  plot.title = element_blank(),
-  axis.text.x = element_text(size = 20),
-  axis.text.y = element_text(size = 20),
-  #axis.text.x = element_blank(),
- # axis.title.x = element_text(size = 20, margin = margin(t = 15, unit = "pt")),
-  axis.title.x = element_blank(),
- # axis.title.y = element_text(size = 20, margin = margin(r = 15, unit = "pt")),
- axis.title.y = element_blank(),
-  strip.text.x = element_text(size = 20),
- plot.margin = unit(c(1.5, 0, 0, 0), "lines"))
-
-   
-
-}
-
-spires_plot<-graph_it(ave_SPIRES_all)
-PIO_plot<-graph_it(ave_PIO_all)
-Belonging_plot<-graph_it(ave_BEH_all)
-
-```
-
-
-```{r}
-
-d4$D_phy<-as.factor(d4$D_phy)
-d4$Session<-as.factor(d4$Session)
-Belonging<-d4%>%
-  filter(type=="SUM_Belonging_post"|type=="SUM_Belonging_pre")%>%
-  mutate(type = fct_relevel(type,
-            "SUM_Belonging_pre", "SUM_Belonging_post"))
-Other_scores<-d4%>%
-  filter(!type=="SUM_Belonging_post",!type=="SUM_Belonging_pre")%>%
-  mutate(type = fct_relevel(type,
-            "Mean_SPIRES_pre", "Mean_SPIRES_post", "PIO_pre","PIO_post" ))
-
-Belonging%>%
-  ggplot(aes(x =type, y= score)) +
-    geom_boxplot()+
-  facet_wrap(~D_phy)+
-  theme_minimal()
-
-
-  ggplot(aes(x =type, y= score)) +
-    geom_boxplot()+
-  facet_wrap(~Gender_man)+
-  theme_minimal()+
-  theme(
-  legend.key.size = unit(1, 'cm'),
-   plot.title = element_text(size = 20),
-  #plot.title = element_blank(),
- #axis.text.x = element_text(size = 20),
-  axis.text.y = element_text(size = 20),
-  #axis.text.x = element_blank(),
- # axis.title.x = element_text(size = 20, margin = margin(t = 15, unit = "pt")),
-  axis.title.x = element_blank(),
- # axis.title.y = element_text(size = 20, margin = margin(r = 15, unit = "pt")),
- axis.title.y = element_blank(),
-  strip.text.x = element_text(size = 20),
- plot.margin = unit(c(1.5, 0, 0, 0), "lines"))
-
-Other_scores%>%
-  ggplot(aes(x =Session, y= score, col=type)) +
-    geom_boxplot()+
-  theme_minimal()
-
-
-d4%>%
-  ggplot(aes(x =D_, y= score)) +
-    geom_bar(stat = "identity", width=0.5, show.legend = FALSE, fill="darkgreen")+
-  facet_wrap(~type)
-```
-
-```{r}
-library(cowplot)
-combined_plot<-plot_grid(spires_plot, PIO_plot, Belonging_plot, ncol=1, align='v', labels=c('Attitude', 'Identity', 'Belonging'), label_size = 20)
-
-final_plot <- ggdraw() +
-                  draw_plot(combined_plot, 0.03, 0.03, 0.97, 0.97) +  # arguments = x, y, width, height
-                  draw_label("Survey Type", x = 0.5, y = 0.01, vjust = 0, angle = 0, size = 20) +  # X-axis label
-                  draw_label("Average Score", x = 0.01, y = 0.5, vjust = 1, angle = 90, size = 20)  # Y-axis label
-
-ggsave("./Figures/Scores_plot.png", final_plot, width = 2000, height = 4000, units = "px")
-
-```
 
 #Gender
 ```{r}
@@ -343,10 +214,9 @@ graph_it(ave_BEH_woman)
 ```
 
 
-GLMM trial- need to make categorical 
+## GLMM trial- need to make categorical 
 ```{r}
-d5<-d4%>%
-  select(-type, -score)%>%unique()
+
 d5$Gender_woman<-as.factor(d5$Gender_woman)
 d5$gender2<-as.factor(d5$gender2)
 d5$LGBT<-as.factor(d5$LGBT)
@@ -362,26 +232,60 @@ d5$D_Men<-as.factor(d5$D_Men)
 d<-d%>%
   mutate(gender=(if_else(Gender_woman==1, "woman", "man")))%>%
   mutate(gender2=(if_else(Gender_NB==1 ,"NB", d$gender)))
+d5<-d5%>%
+  mutate(LGBTQ=(if_else(LGBT==1 ,"Y", "N")))
+
 d<-d%>%
   select(-gender)
   
 ```
 
 ```{r, actual models}
+d5$gender2<-relevel(d5$gender2, ref="woman")
+d5$D_Chron<-relevel(d5$D_Chron, ref="0")
+d5$D_phy<-relevel(d5$D_phy, ref="0")
+d5$D_Men<-relevel(d5$D_Men, ref="0")
+d5$D_Sen<-relevel(d5$D_Sen, ref="0")
+d5$D_Learn<-relevel(d5$D_Learn, ref="1")
 
-m_spires<-lmer(SPIRES_delta~gender2+LGBT+D_phy+D_Men+D_Sen+D_Learn+D_Chron+Race_W+(1|Session), data=d5)
+
+m_spires_lgbt<-lmer(SPIRES_delta~LGBT+(1|Session), data=d5)
+summary(m_spires_lgbt)
+
+em_lgbt<-emmeans(m_spires_lgbt, ~LGBT)
+pairs(em_lgbt)
+
+m_spires<-lmer(SPIRES_delta~D_phy+D_Men+D_Sen+D_Learn+D_Chron+(1|Session), data=d5)
 summary(m_spires)
+vif(m_spires)
+anova(m_spires)
 check_overdispersion(m_spires)
+vif(m_spires)
 
-m_pio<-lmer(PIO_delta~gender2+LGBT+D_phy+D_Men+D_Sen+D_Learn+D_Chron+Race_W+(1|Session), data=d5)
+m_pio<-lmer(PIO_delta~D_phy*D_Men*D_Sen*D_Learn*D_Chron+(1|Session), data=d5)
 summary(m_pio)
-check_overdispersion(m_spires)
+check_overdispersion(m_pio)
+anova(m_pio)
 
-m_bel<-lmer(BEL_delta~gender2+LGBT+D_phy+D_Men+D_Sen+D_Learn+D_Chron+Race_W+(1|Session), data=d5)
+m_bel<-lmer(BEL_delta~D_Men*D_Sen*D_Learn*D_Chron*D_phy+(1|Session), data=d5)
 summary(m_bel)
 check_overdispersion(m_bel)
+anova(m_bel)
 
 ```
+```{r}
+lgbt_spires<-d5%>%
+  filter(LGBT==1)%>%
+  filter(gender2=="man")%>%
+  summarize(meanspires=mean(SPIRES_delta))
+
+lgbt0_spires<-d5%>%
+  filter(LGBT==0)%>%
+  filter(gender2=="man")%>%
+  filter(D_Men==1)%>%
+  summarize(meanspires=mean(SPIRES_delta))
+```
+
 ```{r, model selection}
 options(na.action = "na.fail")
 spires_dredge<-dredge(m_spires,  rank= "AICc")
@@ -446,11 +350,224 @@ check_overdispersion(m9)
 #session as fixed effect 
 
 ```
-```{r}
-d_LGBT_learn<-d%>%
-  filter(LGBT==1)%>%
-  filter(D_Learn==0)
 
-t.test(d_LGBT_learn$Mean_SPIRES_post,d_LGBT_learn$Mean_SPIRES_pre)
+#SPLIT UP DISABILITY TYPES FOR INDIVIDUAL T-TESTS
+```{r, SPIRES demo}
+D_phy<-d%>%
+  filter(D_phy==1)
+
+t.test(D_phy$Mean_SPIRES_post,D_phy$Mean_SPIRES_pre, paired=TRUE)
+
+D_chron<-d%>%
+  filter(D_Chron==1)
+
+t.test(D_chron$Mean_SPIRES_post,D_chron$Mean_SPIRES_pre, paired=TRUE)
+
+
+D_Sen<-d%>%
+  filter(D_Sen==1)
+
+t.test(D_Sen$Mean_SPIRES_post,D_Sen$Mean_SPIRES_pre, paired=TRUE)
+
+D_Men<-d%>%
+  filter(D_Men==1)
+
+t.test(D_Men$Mean_SPIRES_post,D_Men$Mean_SPIRES_pre, paired=TRUE)
+
+D_Learn<-d%>%
+  filter(D_Learn==1)
+
+t.test(D_Learn$Mean_SPIRES_post,D_Learn$Mean_SPIRES_pre, paired=TRUE)
+
+
+```
+
+
+```{r, PIO demo}
+
+t.test(D_phy$PIO_post,D_phy$PIO_pre, paired=TRUE)
+
+
+t.test(D_chron$PIO_post,D_chron$PIO_pre, paired=TRUE)
+
+
+t.test(D_Sen$PIO_post,D_Sen$PIO_pre, paired=TRUE)
+
+
+t.test(D_Men$PIO_post,D_Men$PIO_pre, paired=TRUE)
+
+t.test(D_Learn$PIO_post,D_Learn$PIO_pre, paired=TRUE)
+
+```
+```{r,BEL demo}
+
+t.test(D_phy$SUM_Belonging_post,D_phy$SUM_Belonging_pre, paired=TRUE)
+
+
+t.test(D_chron$SUM_Belonging_post,D_chron$SUM_Belonging_pre, paired=TRUE)
+
+
+t.test(D_Sen$SUM_Belonging_post,D_Sen$SUM_Belonging_pre, paired=TRUE)
+
+
+t.test(D_Men$SUM_Belonging_post,D_Men$SUM_Belonging_pre, paired=TRUE)
+
+t.test(D_Learn$SUM_Belonging_post,D_Learn$SUM_Belonging_pre, paired=TRUE)
+
+```
+#MAKE disability types as categories in one column
+
+```{r}
+
+d6 <- d5 %>%
+  pivot_longer(
+    cols = c(D_phy, D_Chron, D_Sen, D_Men, D_Learn),
+    names_to = "D_type",
+    values_to = "Y/N"
+  )
+
+```
+
+##PLOTTING
+```{r}
+m_SPIRES<-lmer(Mean_SPIRES_post~Mean_SPIRES_pre+(1|Session), data=d)
+summary(m_SPIRES)
+plot(d$Mean_SPIRES_post~d$Mean_SPIRES_pre)
+```
+
+```{r}
+# create an average pre-and post for each score, then graph those 6 numbers
+
+std <- function(x) sd(x)/sqrt(length(x)) #standard  error function
+ave_scores <- d4 %>%
+  group_by(type) %>%
+  summarise(
+  ave_score = mean(score, na.rm=TRUE), # create average score
+  std=std(score)) # std for error bars
+
+
+# this function doesn't work yet - still works as separate chunks of code
+#separate_scores <- function(ave_scores) {
+
+ave_SPIRES_all <- ave_scores |>
+  filter(type %in% c("Mean_SPIRES_pre", "Mean_SPIRES_post")) |>
+  mutate(measure = "SPIRES (Attitude)",
+         type = recode_factor(type, "Mean_SPIRES_pre" = "PRE", "Mean_SPIRES_post" = "POST"))
+ave_PIO_all <- ave_scores |>
+  filter(type %in% c("PIO_pre", "PIO_post")) |>
+  mutate(measure = "PIO (Identity)",
+         type = recode_factor(type, "PIO_pre" = "PRE", "PIO_post" = "POST"))
+ave_BEH_all <- ave_scores |>
+  filter(type %in% c("SUM_Belonging_pre", "SUM_Belonging_post")) |>
+  mutate(measure = "Belonging",
+         type = recode_factor(type, "SUM_Belonging_pre" = "PRE", "SUM_Belonging_post" = "POST"))
+#return(c(ave_SPIRES,ave_PIO,ave_BEH))
+
+#}
+
+#ave_SPIRES <- separate_scores(ave_scores)[1]
+ave_SPIRES_all
+ave_PIO_all
+ave_BEH_all
+```
+## PLOTTING
+```{r}
+
+graph_it <- function(x) {
+measure <- x$measure[1]
+#get user input for plot title?
+x |>
+  mutate(type = fct_relevel(type,
+            "PRE", "POST")) |>
+  ggplot(aes(x = type, y= ave_score)) +
+    geom_bar(stat = "identity", width=0.5, show.legend = FALSE, fill="grey")+
+   geom_errorbar(aes(x=type, ymin=ave_score-std, ymax=ave_score+std), width=0.4, colour="black", alpha=0.9, linewidth=1.3)+
+    #labs(title= measure, x = "", y = "Average Score") +
+    theme_minimal()+
+  theme(
+  legend.key.size = unit(1, 'cm'),
+  # plot.title = element_text(size = 20),
+  plot.title = element_blank(),
+  axis.text.x = element_text(size = 20),
+  axis.text.y = element_text(size = 20),
+  #axis.text.x = element_blank(),
+ # axis.title.x = element_text(size = 20, margin = margin(t = 15, unit = "pt")),
+  axis.title.x = element_blank(),
+ # axis.title.y = element_text(size = 20, margin = margin(r = 15, unit = "pt")),
+ axis.title.y = element_blank(),
+  strip.text.x = element_text(size = 20),
+ plot.margin = unit(c(1.5, 0, 0, 0), "lines"))
+
+   
+
+}
+
+spires_plot<-graph_it(ave_SPIRES_all)
+PIO_plot<-graph_it(ave_PIO_all)
+Belonging_plot<-graph_it(ave_BEH_all)
+
+```
+
+##PLOTTING
+```{r}
+
+d4$D_phy<-as.factor(d4$D_phy)
+d4$Session<-as.factor(d4$Session)
+Belonging<-d4%>%
+  filter(type=="SUM_Belonging_post"|type=="SUM_Belonging_pre")%>%
+  mutate(type = fct_relevel(type,
+            "SUM_Belonging_pre", "SUM_Belonging_post"))
+Other_scores<-d4%>%
+  filter(!type=="SUM_Belonging_post",!type=="SUM_Belonging_pre")%>%
+  mutate(type = fct_relevel(type,
+            "Mean_SPIRES_pre", "Mean_SPIRES_post", "PIO_pre","PIO_post" ))
+
+Belonging%>%
+  ggplot(aes(x =type, y= score)) +
+    geom_boxplot()+
+  facet_wrap(~D_phy)+
+  theme_minimal()
+
+
+  ggplot(aes(x =type, y= score)) +
+    geom_boxplot()+
+  facet_wrap(~Gender_man)+
+  theme_minimal()+
+  theme(
+  legend.key.size = unit(1, 'cm'),
+   plot.title = element_text(size = 20),
+  #plot.title = element_blank(),
+ #axis.text.x = element_text(size = 20),
+  axis.text.y = element_text(size = 20),
+  #axis.text.x = element_blank(),
+ # axis.title.x = element_text(size = 20, margin = margin(t = 15, unit = "pt")),
+  axis.title.x = element_blank(),
+ # axis.title.y = element_text(size = 20, margin = margin(r = 15, unit = "pt")),
+ axis.title.y = element_blank(),
+  strip.text.x = element_text(size = 20),
+ plot.margin = unit(c(1.5, 0, 0, 0), "lines"))
+
+Other_scores%>%
+  ggplot(aes(x =Session, y= score, col=type)) +
+    geom_boxplot()+
+  theme_minimal()
+
+
+
+  ggplot(aes(x =D_, y= score)) +
+    geom_bar(stat = "identity", width=0.5, show.legend = FALSE, fill="darkgreen")+
+  facet_wrap(~type)
+```
+
+```{r}
+library(cowplot)
+combined_plot<-plot_grid(spires_plot, PIO_plot, Belonging_plot, ncol=1, align='v', labels=c('Attitude', 'Identity', 'Belonging'), label_size = 20)
+
+final_plot <- ggdraw() +
+                  draw_plot(combined_plot, 0.03, 0.03, 0.97, 0.97) +  # arguments = x, y, width, height
+                  draw_label("Survey Type", x = 0.5, y = 0.01, vjust = 0, angle = 0, size = 20) +  # X-axis label
+                  draw_label("Average Score", x = 0.01, y = 0.5, vjust = 1, angle = 90, size = 20)  # Y-axis label
+
+ggsave("./Figures/Scores_plot.png", final_plot, width = 2000, height = 4000, units = "px")
 
 ```
