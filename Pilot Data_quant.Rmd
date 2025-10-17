@@ -26,12 +26,15 @@ d <- read_excel("WC_AccessibilityPilot.xlsx") # works, but you have to set the W
 
 d<-d%>%
   select(-Name)
+ 
+
 d<-d%>%
   mutate(Mean_SPIRES_pre=(SPIRES1_pre+SPIRES2_pre+SPIRES3_pre+SPIRES4_pre_RC+SPIRES5_pre_RC)/5, Mean_SPIRES_post=(SPIRES1_post+SPIRES2_post+SPIRES3_post+SPIRES4_post_RC+SPIRES5_post_RC)/5)
 d<-d%>%
   mutate(SUM_Belonging_pre=B_sc_pre+B_sw_pre+B_csc_pre+B_out_pre_RC+B_acc_pre+B_res_pre+B_dis_pre_RC+B_val_pre+B_neg_pre_RC+B_app_pre+B_ex_pre_RC+B_fit_pre+B_insig_pre_RC+B_ease_pre+B_anx_pre_RC+B_comf_pre+B_tense_pre_RC+B_nerve_pre_RC+B_cont_pre+B_calm_pre+B_inad_pre_RC)
 d<-d%>%
   mutate(SUM_Belonging_post=B_sc_post+B_sw_post+B_csc_post+B_out_post_RC+B_acc_post+B_res_post+B_dis_post_RC+B_val_post+B_neg_post_RC+B_app_post+B_ex_post_RC+B_fit_post+B_insig_post_RC+B_ease_post+B_anx_post_RC+B_comf_post+B_tense_post_RC+B_nerve_post_RC+B_cont_post+B_calm_post+B_inad_post_RC)
+d<-drop_na(d)
 
 ```
 
@@ -239,21 +242,15 @@ d<-d%>%
   select(-gender)
   
 ```
-
+#######models with dummy coding for disability type#############
 ```{r, actual models}
 d5$gender2<-relevel(d5$gender2, ref="woman")
 d5$D_Chron<-relevel(d5$D_Chron, ref="0")
 d5$D_phy<-relevel(d5$D_phy, ref="0")
 d5$D_Men<-relevel(d5$D_Men, ref="0")
 d5$D_Sen<-relevel(d5$D_Sen, ref="0")
-d5$D_Learn<-relevel(d5$D_Learn, ref="1")
+d5$D_Learn<-relevel(d5$D_Learn, ref="0")
 
-
-m_spires_lgbt<-lmer(SPIRES_delta~LGBT+(1|Session), data=d5)
-summary(m_spires_lgbt)
-
-em_lgbt<-emmeans(m_spires_lgbt, ~LGBT)
-pairs(em_lgbt)
 
 m_spires<-lmer(SPIRES_delta~D_phy+D_Men+D_Sen+D_Learn+D_Chron+(1|Session), data=d5)
 summary(m_spires)
@@ -301,53 +298,6 @@ bel_dredge<-dredge(m_bel,  rank= "AICc")
 top_model_bel<-get.models(bel_dredge, subset = 1)[[1]] #intercept is only model
 summary(top_model_bel) #top model has everything, gender NB is sig
 
-
-```
-
-```{r}
-#session as random effect
-m1<- lmer(Mean_SPIRES_pre ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
-summary(m1)
-check_overdispersion(m1)
-m2<-lmer(Mean_SPIRES_post ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
-summary(m2)
-m3<- lmer(PIO_pre ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
-summary(m3)
-m4<- lmer(PIO_post ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
-summary(m4)
-m5<- lmer(SPIRES_delta ~ LGBT+D_Learn+(1|Session), data = d5)
-summary(m5)
-m6<- lmer(SPIRES_delta ~ LGBT*D_Learn+(1|Session), data = d5)
-summary(m6)
-anova(m6)
-check_overdispersion(m6)
-
-d5<-d4%>%
-  select(-type, -score)%>%unique()
-
-
-m7<- lmer(SPIRES_delta~ Gender_woman+D_Chron+D_Learn+LGBT+D_Sen+D_phy+D_Men+(1|Session), data = d5)
-summary(m7)
-options(na.action = "na.fail")
-m7_dredge<-dredge(m7,  rank= "AICc")
-top_model_spires<-get.models(m7_dredge, subset = 1)[[1]] #intercept is only model
-summary(top_model_spires)
-
-m8<- lmer(PIO_delta~ Gender_woman+LGBT+D_phy+D_Men+D_Sen+D_Learn+D_Chron+Race_W+(1|Session), data = d5)
-summary(m8)
-m8_dredge<-dredge(m8,  rank= "AICc")
-top_model_PIO<-get.models(m8_dredge, subset = 1)[[1]]
-summary(top_model_PIO)#intercept is only model
-
-
-m9<- lmer(BEL_delta~ Gender_woman+Gender_NB+LGBT+D_phy+D_Men+D_Sen+D_Learn+D_Chron+Race_W+(1|Session), data = d5)
-summary(m9)
-m9_dredge<-dredge(m9,  rank= "AICc")
-top_model_BEL<-get.models(m9_dredge, subset = 1)[[1]]
-summary(top_model_BEL) #top model has everything, nothing is sig
-vif(m9)
-check_overdispersion(m9)
-#session as fixed effect 
 
 ```
 
@@ -423,10 +373,42 @@ d6 <- d5 %>%
   pivot_longer(
     cols = c(D_phy, D_Chron, D_Sen, D_Men, D_Learn),
     names_to = "D_type",
-    values_to = "Y/N"
+    values_to = "YN"
   )
+d6<-d6%>%
+  filter(YN=="1")
 
 ```
+#########Models with disability type as cat and ID as random effect
+```{r}
+hist(d6$SPIRES_delta)
+d6$ID<-as.factor(d6$ID)
+m_spires<-lmer(SPIRES_delta~D_type+(1|Session/ID), data=d6)#BIG WARNING for rescaling, failed to converge, unless take away individual ID
+summary(m_spires)
+
+m_PIO<-lmer(PIO_delta~D_type+(1|Session)+(1|ID), data=d6)#BIG WARNING for rescaling, failed to converge
+summary(m_PIO)
+
+
+m_BEL<-lmer(BEL_delta~D_type+(1|Session)+(1|ID), data=d6)#BIG WARNING for rescaling, failed to converge
+summary(m_BEL)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ##PLOTTING
 ```{r}
@@ -571,3 +553,51 @@ final_plot <- ggdraw() +
 ggsave("./Figures/Scores_plot.png", final_plot, width = 2000, height = 4000, units = "px")
 
 ```
+#random models
+```{r}
+#session as random effect
+m1<- lmer(Mean_SPIRES_pre ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
+summary(m1)
+check_overdispersion(m1)
+m2<-lmer(Mean_SPIRES_post ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
+summary(m2)
+m3<- lmer(PIO_pre ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
+summary(m3)
+m4<- lmer(PIO_post ~ LGBT+Gender_woman+D_phy+(1|Session), data = d)
+summary(m4)
+m5<- lmer(SPIRES_delta ~ LGBT+D_Learn+(1|Session), data = d5)
+summary(m5)
+m6<- lmer(SPIRES_delta ~ LGBT*D_Learn+(1|Session), data = d5)
+summary(m6)
+anova(m6)
+check_overdispersion(m6)
+
+d5<-d4%>%
+  select(-type, -score)%>%unique()
+
+
+m7<- lmer(SPIRES_delta~ Gender_woman+D_Chron+D_Learn+LGBT+D_Sen+D_phy+D_Men+(1|Session), data = d5)
+summary(m7)
+options(na.action = "na.fail")
+m7_dredge<-dredge(m7,  rank= "AICc")
+top_model_spires<-get.models(m7_dredge, subset = 1)[[1]] #intercept is only model
+summary(top_model_spires)
+
+m8<- lmer(PIO_delta~ Gender_woman+LGBT+D_phy+D_Men+D_Sen+D_Learn+D_Chron+Race_W+(1|Session), data = d5)
+summary(m8)
+m8_dredge<-dredge(m8,  rank= "AICc")
+top_model_PIO<-get.models(m8_dredge, subset = 1)[[1]]
+summary(top_model_PIO)#intercept is only model
+
+
+m9<- lmer(BEL_delta~ Gender_woman+Gender_NB+LGBT+D_phy+D_Men+D_Sen+D_Learn+D_Chron+Race_W+(1|Session), data = d5)
+summary(m9)
+m9_dredge<-dredge(m9,  rank= "AICc")
+top_model_BEL<-get.models(m9_dredge, subset = 1)[[1]]
+summary(top_model_BEL) #top model has everything, nothing is sig
+vif(m9)
+check_overdispersion(m9)
+#session as fixed effect 
+
+```
+
