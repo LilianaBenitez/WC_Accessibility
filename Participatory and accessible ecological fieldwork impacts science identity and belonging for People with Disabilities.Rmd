@@ -1,0 +1,255 @@
+---
+title: Participatory and accessible ecological fieldwork impacts science identity
+  and belonging for People with Disabilities
+author: "Lili Benitez"
+date: "2026-01-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(readxl)
+library(lme4)
+library(lmerTest)
+library(car)
+library(emmeans)
+```
+
+## Quantitative analysis
+
+
+
+```{r enter and prep data, echo=FALSE}
+d <- read_excel("WC_AccessibilityPilot.xlsx") 
+
+d<-d%>%
+  select(-Name) #remove name column if there
+ 
+
+d<-d%>%
+  mutate(Mean_SPIRES_pre=(SPIRES1_pre+SPIRES2_pre+SPIRES3_pre+SPIRES4_pre_RC+SPIRES5_pre_RC)/5, Mean_SPIRES_post=(SPIRES1_post+SPIRES2_post+SPIRES3_post+SPIRES4_post_RC+SPIRES5_post_RC)/5)# making columns with average SPIRES scores
+
+d<-d%>%
+  mutate(SUM_Belonging_pre=B_sc_pre+B_sw_pre+B_csc_pre+B_out_pre_RC+B_acc_pre+B_res_pre+B_dis_pre_RC+B_val_pre+B_neg_pre_RC+B_app_pre+B_ex_pre_RC+B_fit_pre+B_insig_pre_RC+B_ease_pre+B_anx_pre_RC+B_comf_pre+B_tense_pre_RC+B_nerve_pre_RC+B_cont_pre+B_calm_pre+B_inad_pre_RC) #making columns with sum Pre-intervention belonging scores
+
+d<-d%>%
+  mutate(SUM_Belonging_post=B_sc_post+B_sw_post+B_csc_post+B_out_post_RC+B_acc_post+B_res_post+B_dis_post_RC+B_val_post+B_neg_post_RC+B_app_post+B_ex_post_RC+B_fit_post+B_insig_post_RC+B_ease_post+B_anx_post_RC+B_comf_post+B_tense_post_RC+B_nerve_post_RC+B_cont_post+B_calm_post+B_inad_post_RC)#making columns with sum post-intervention belonging scores
+
+d<-drop_na(d) #getting rid of nas
+
+
+d <- d %>%
+  pivot_longer(
+    cols = c(D_phy, D_Chron, D_Sen, D_Men, D_Learn),
+    names_to = "D_type",
+    values_to = "YN"
+  )
+d<-d%>%
+  filter(YN=="1")
+
+d<-d%>%
+  group_by(ID)%>%
+  mutate(combined_text = paste(D_type, collapse = " "))%>%
+  select(-D_type)
+
+d<-d%>%mutate (Disability_type=if_else(combined_text=="D_phy", "D_phy_only", 
+                                         if_else(combined_text=="D_Chron", "D_chron_only", 
+                                                 if_else(combined_text=="D_Men", "D_Men_only", 
+                                                         if_else(combined_text=="D_Learn", "D_Learn_only", 
+                                                                 if_else(combined_text=="D_Sen", "D_Sen_only", "combined"))))))%>%
+  unique()# making column for disability as categorical, including a "combined/multiple" option
+
+head(d) #view data
+
+```
+
+## T-tests
+```{r}
+t.test(d$Mean_SPIRES_post,d$Mean_SPIRES_pre, paired=TRUE) #p-value = 1.696e-09
+
+t.test(d$SUM_Belonging_post,d$SUM_Belonging_pre, paired=TRUE) # p-value = 5.884e-06
+
+t.test(d$PIO_post,d$PIO_pre, paired = TRUE) #p-value = 2.304e-06
+```
+## Data prep for linear models
+```{r, echo=FALSE}
+d2 <- select(d, c(ID, Session, Gender_man, Gender_woman, Gender_NB, Race_W, Race_B, Race_N, Race_A,
+                  Race_H, LGBT, Mean_SPIRES_post,
+                  Mean_SPIRES_pre, SUM_Belonging_pre, SUM_Belonging_post, PIO_pre, PIO_post, Disability_type))
+
+d2$PIO_delta <- d2$PIO_post - d2$PIO_pre
+d2$BEL_delta <- d2$SUM_Belonging_post - d2$SUM_Belonging_pre
+d2$SPIRES_delta <- d2$Mean_SPIRES_post - d2$Mean_SPIRES_pre
+
+# create long table
+d3 <- pivot_longer(data = d2, cols = c(Mean_SPIRES_post, Mean_SPIRES_pre, SUM_Belonging_pre, SUM_Belonging_post, PIO_pre, PIO_post),
+                  names_to = "type", values_to = "score") # looks good, all scores populate at the end of the table, all demographics retained
+
+d3$type <- as.factor(d3$type)
+d4<-d3|>
+  drop_na()
+d5<-d4%>%
+  select(-type, -score)%>%unique()
+```
+## Linear models for change in score by disability type
+```{r linear models, echo=FALSE}
+m_spires<-lmer(SPIRES_delta~Disability_type+(1|Session), data=d5)
+summary(m_spires)
+anova(m_spires)
+emm_SPIRES<-emmeans(m_spires, ~Disability_type)
+pairs(emm_SPIRES)
+
+m_PIO<-lmer(PIO_delta~Disability_type+(1|Session), data=d5)
+summary(m_PIO)
+anova(m_PIO)
+emm_PIO<-emmeans(m_PIO, ~Disability_type)
+pairs(emm_PIO)
+
+m_BEL<-lmer(BEL_delta~Disability_type+(1|Session), data=d5)
+summary(m_BEL)
+anova(m_BEL)
+emm_BEL<-emmeans(m_BEL, ~Disability_type)
+pairs(emm_BEL)
+```
+
+## Data prep for figure 2
+
+```{r, echo=FALSE}
+# create an average pre-and post for each score, then graph those 6 numbers
+
+std <- function(x) sd(x)/sqrt(length(x)) #standard  error function
+ave_scores <- d4 %>%
+  group_by(type) %>%
+  summarise(
+  ave_score = mean(score, na.rm=TRUE), # create average score
+  std=std(score)) # std for error bars
+
+
+
+# this function doesn't work yet - still works as separate chunks of code
+#separate_scores <- function(ave_scores) {
+
+ave_SPIRES_all <- ave_scores |>
+  filter(type %in% c("Mean_SPIRES_pre", "Mean_SPIRES_post")) |>
+  mutate(measure = "SPIRES (Attitude)",
+         type = recode_factor(type, "Mean_SPIRES_pre" = "PRE", "Mean_SPIRES_post" = "POST"))
+ave_PIO_all <- ave_scores |>
+  filter(type %in% c("PIO_pre", "PIO_post")) |>
+  mutate(measure = "PIO (Identity)",
+         type = recode_factor(type, "PIO_pre" = "PRE", "PIO_post" = "POST"))
+ave_BEH_all <- ave_scores |>
+  filter(type %in% c("SUM_Belonging_pre", "SUM_Belonging_post")) |>
+  mutate(measure = "Belonging",
+         type = recode_factor(type, "SUM_Belonging_pre" = "PRE", "SUM_Belonging_post" = "POST"))
+#return(c(ave_SPIRES,ave_PIO,ave_BEH))
+
+#}
+
+#ave_SPIRES <- separate_scores(ave_scores)[1]
+ave_SPIRES_all
+ave_PIO_all
+ave_BEH_all
+```
+## Figure 2
+
+```{r figure 2, echo=FALSE}
+p_SPIRES<-ave_SPIRES_all |>
+  mutate(type = fct_relevel(type,
+            "PRE", "POST")) |>
+  ggplot(aes(x = type, y= ave_score)) +
+   geom_errorbar(aes(x=type, ymin=ave_score-std, ymax=ave_score+std), width=0.2, colour="darkgrey", alpha=1, linewidth=1.5)+
+   # labs(title= measure, x = "", y = "Average Score") +
+     geom_point(stat = "identity", size=7, show.legend = FALSE, fill="black")+
+  theme_classic()+
+  ylim(3,5)+
+  theme(
+  legend.key.size = unit(1, 'cm'),
+  plot.title = element_blank(),
+  axis.text.x = element_text(size = 30),
+  axis.text.y = element_text(size = 30),
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  strip.text.x = element_text(size = 30),
+ )
+ 
+
+p_PIO<-ave_PIO_all |>
+  mutate(type = fct_relevel(type,
+            "PRE", "POST")) |>
+  ggplot(aes(x = type, y= ave_score)) +
+   geom_errorbar(aes(x=type, ymin=ave_score-std, ymax=ave_score+std), width=0.2, colour="darkgrey", alpha=1, linewidth=1.5)+
+      geom_point(stat = "identity", size=7, show.legend = FALSE, fill="black", shape=17)+
+  theme_classic()+
+  ylim(3,6)+
+  theme(
+  legend.key.size = unit(1, 'cm'),
+  plot.title = element_blank(),
+  axis.text.x = element_text(size = 30),
+  axis.text.y = element_text(size = 30),
+  axis.title.x = element_blank(),
+ axis.title.y = element_blank(),
+  strip.text.x = element_text(size = 30),
+ )
+
+p_BEH<-ave_BEH_all |>
+  mutate(type = fct_relevel(type,
+            "PRE", "POST")) |>
+  ggplot(aes(x = type, y= ave_score)) +
+   geom_errorbar(aes(x=type, ymin=ave_score-std, ymax=ave_score+std), width=0.2, colour="darkgrey", alpha=1, linewidth=1.5)+
+     geom_point(stat = "identity", size=7, show.legend = FALSE, fill="black", shape=15)+
+    theme_classic()+
+  ylim(90, 125)+
+  theme(
+  legend.key.size = unit(1, 'cm'),
+  plot.title = element_blank(),
+  axis.text.x = element_text(size = 30),
+  axis.text.y = element_text(size = 30),
+  axis.title.x = element_blank(),
+ axis.title.y = element_blank(),
+  strip.text.x = element_text(size = 30),
+ )
+
+library(cowplot) #use cowplot to combine three figures above
+combined_plot<-plot_grid(p_SPIRES, p_PIO, p_BEH, ncol=3, align="hv",labels=c(' SPIRES', '   PIO', 'Belonging'), label_size = 30, label_x=.05)
+
+final_plot <- ggdraw() +
+                  draw_plot(combined_plot, 0.03, 0.03, 0.97, 0.97) +  # arguments = x, y, width, height
+                 # draw_label("Survey Type", x = 0.5, y = 0.01, vjust = 0, angle = 0, size = 30) +  # X-axis label
+                  draw_label("Participant measure score", x = 0.01, y = 0.5, vjust = 1, angle = 90, size = 30)  # Y-axis label
+
+#ggsave("./Figures/Scores_plot.png", final_plot, width = 5000, height = 2050, units = "px")
+
+final_plot
+```
+
+## Data checks
+
+```{r data checks, echo=FALSE}
+hist(d$Mean_SPIRES_pre)
+hist(d$Mean_SPIRES_post) #doesn't look the most normal
+shapiro.test(d$Mean_SPIRES_pre) #normal
+shapiro.test(d$Mean_SPIRES_post) #p=0.01
+
+hist(d$SUM_Belonging_pre)
+hist(d$SUM_Belonging_post) #doesn't look the most normal
+shapiro.test(d$SUM_Belonging_pre) #normal
+shapiro.test(d$SUM_Belonging_post) #p=0.001
+sd(d$SUM_Belonging_post)
+sd(d$SUM_Belonging_pre)
+
+hist(d$PIO_pre)
+hist(d$PIO_post)
+shapiro.test(d$PIO_pre)
+shapiro.test(d$PIO_post) #not normal
+sd(d$PIO_post)
+sd(d$PIO_pre)
+
+qqnorm(d$Mean_SPIRES_pre)
+qqnorm(d$Mean_SPIRES_post)
+qqnorm(d$SUM_Belonging_pre)
+qqnorm(d$SUM_Belonging_post)
+qqnorm(d$PIO_pre)
+qqnorm(d$PIO_post)
+#qqplots
+```
