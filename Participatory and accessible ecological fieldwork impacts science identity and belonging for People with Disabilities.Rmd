@@ -1,7 +1,7 @@
 ---
 title: Participatory and accessible ecological fieldwork impacts science identity
   and belonging for People with Disabilities
-author: "Lili Benitez"
+author: "Lili Benitez, Livia Raulinaitis, Ariel Chasen"
 date: "2026-01-16"
 output: html_document
 ---
@@ -21,11 +21,8 @@ library(emmeans)
 
 
 ```{r enter and prep data, echo=FALSE}
-d <- read_excel("WC_AccessibilityPilot.xlsx") 
+d <- read_excel("WC_AccessibilityPilot_anaon.xlsx") 
 
-d<-d%>%
-  select(-Name) #remove name column if there
- 
 
 d<-d%>%
   mutate(Mean_SPIRES_pre=(SPIRES1_pre+SPIRES2_pre+SPIRES3_pre+SPIRES4_pre_RC+SPIRES5_pre_RC)/5, Mean_SPIRES_post=(SPIRES1_post+SPIRES2_post+SPIRES3_post+SPIRES4_post_RC+SPIRES5_post_RC)/5)# making columns with average SPIRES scores
@@ -252,4 +249,33 @@ qqnorm(d$SUM_Belonging_post)
 qqnorm(d$PIO_pre)
 qqnorm(d$PIO_post)
 #qqplots
+```
+
+## Supplement
+```{r, echo=FALSE}
+wilcox.test(d$Mean_SPIRES_post, d$Mean_SPIRES_pre, paired=TRUE) #warnings about exact p value with ties and zeros
+
+wilcox.test(d$PIO_post,d$PIO_pre, paired=TRUE) #warnings about ties and zeros. V = 653.5, p-value = 5.374e-06
+
+wilcox.test(d$SUM_Belonging_post,d$SUM_Belonging_pre, paired=TRUE) #warnings about ties and zeros. V = 653.5, p-value = 5.374e-06
+
+
+d_PIO<-d3%>%
+  filter(type=="PIO_pre"|type=="PIO_post")
+
+d_SPIRES<-d3%>%
+  filter(type=="Mean_SPIRES_pre"|type=="Mean_SPIRES_post")
+
+d_bel<-d3%>%
+  filter(type=="SUM_Belonging_pre"|type=="SUM_Belonging_post")
+
+m_PIO_tot<-lmer(score~type+(1|Session)+(1|ID), data=d_PIO)
+summary(m_PIO_tot)
+anova(m_PIO_tot)
+
+m_sp_tot<-lmer(score~type+(1|Session)+(1|ID), data=d_SPIRES)
+summary(m_sp_tot)
+
+m_bel_tot<-lmer(score~type+(1|Session)+(1|ID), data=d_bel) #type=pre and post
+summary(m_bel_tot)
 ```
